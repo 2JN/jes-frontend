@@ -1,65 +1,140 @@
-import Head from 'next/head'
-import styles from '../styles/Home.module.css'
+import React, { useState } from "react";
+import useSWR, { mutate } from "swr";
+import { makeStyles } from "@material-ui/core/styles";
+import Container from "@material-ui/core/Container";
+import Grid from "@material-ui/core/Grid";
+import Typography from "@material-ui/core/Typography";
+import Dialog from "@material-ui/core/Dialog";
+import DialogContent from "@material-ui/core/DialogContent";
+import Snackbar from "@material-ui/core/Snackbar";
+import Alert from "@material-ui/lab/Alert";
+import Fab from "@material-ui/core/Fab";
+import AddIcon from "@material-ui/icons/Add";
 
-export default function Home() {
+import fetcher from "../utils/fetcher";
+import AppBar from "../components/AppBar";
+import InstitutionCard from "../components/InstitutionCard";
+import InstitutionForm from "../components/InstitutionForm";
+import InstitutionCardSkeleton from "../components/InstitutionCardSkeleton";
+
+const beURI = process.env.NEXT_PUBLIC_BACKEND_URI;
+const useStyles = makeStyles((theme) => ({
+  container: {
+    paddingTop: theme.spacing(3),
+    paddingBottom: theme.spacing(5),
+  },
+  fab: {
+    position: "fixed",
+    right: theme.spacing(3),
+    bottom: theme.spacing(3),
+  },
+}));
+
+export default function Index() {
+  const classes = useStyles();
+  const [isNewDialogOpen, setNewDialogOpen] = useState(false);
+  const [snackAlert, setSnackAlert] = useState({
+    isOpen: false,
+    message: "",
+    severity: "",
+  });
+  const { data, error } = useSWR(`${beURI}/institutions`, fetcher);
+
+  const alternateNewDialog = () => {
+    setNewDialogOpen((isOpen) => !isOpen);
+  };
+
+  const closeAlert = () => {
+    setSnackAlert((prevState) => ({
+      ...prevState,
+      isOpen: false,
+    }));
+  };
+
+  const handleNewDialog = (created) => {
+    setNewDialogOpen(false);
+
+    if (!created) return;
+    setSnackAlert({
+      isOpen: true,
+      message: "Se creo una nueva institución",
+      severity: "success",
+    });
+  };
+
+  const handleDelete = (_id) => {
+    fetcher(`${beURI}/institutions/${_id}`, {
+      method: "DELETE",
+    })
+      .then(() => {
+        mutate(`${beURI}/institutions`);
+        setSnackAlert({
+          isOpen: true,
+          message: "Se elimino la institución",
+          severity: "success",
+        });
+      })
+      .catch((err) => {
+        console.error(err);
+        setSnackAlert({
+          isOpen: true,
+          message: "Ocurrio un error, intentelo más tarde",
+          severity: "error",
+        });
+      });
+  };
+
   return (
-    <div className={styles.container}>
-      <Head>
-        <title>Create Next App</title>
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
+    <>
+      <AppBar />
+      <Container className={classes.container}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          Instituciones
+        </Typography>
+        {!data && !error && (
+          <Grid item xs={12} md={4}>
+            <InstitutionCardSkeleton />
+          </Grid>
+        )}
+        {error && <div>failed to load</div>}
+        <Grid container spacing={3}>
+          {data &&
+            data.map((institution) => (
+              <Grid item key={institution._id} xs={12} sm={6} md={4}>
+                <InstitutionCard {...institution} onDelete={handleDelete} />
+              </Grid>
+            ))}
+        </Grid>
+      </Container>
 
-      <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
+      <Dialog
+        open={isNewDialogOpen}
+        onClose={alternateNewDialog}
+        aria-labelledby="form-dialog-institution"
+      >
+        <DialogContent>
+          <InstitutionForm confirm={handleNewDialog} />
+        </DialogContent>
+      </Dialog>
 
-        <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.js</code>
-        </p>
+      <Snackbar
+        open={snackAlert.isOpen}
+        autoHideDuration={3000}
+        onClose={closeAlert}
+      >
+        <Alert onClose={closeAlert} severity={snackAlert.severity}>
+          {snackAlert.message}
+        </Alert>
+      </Snackbar>
 
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h3>Documentation &rarr;</h3>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h3>Learn &rarr;</h3>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/master/examples"
-            className={styles.card}
-          >
-            <h3>Examples &rarr;</h3>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h3>Deploy &rarr;</h3>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
-      </main>
-
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <img src="/vercel.svg" alt="Vercel Logo" className={styles.logo} />
-        </a>
-      </footer>
-    </div>
-  )
+      <Fab
+        onClick={alternateNewDialog}
+        color="primary"
+        aria-label="add"
+        className={classes.fab}
+      >
+        <AddIcon />
+      </Fab>
+    </>
+  );
 }
